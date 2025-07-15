@@ -1,6 +1,6 @@
-import { getUnitPrisma, ALL_UNITS } from './unitService'
+import { getUnitPrisma } from './unitService'
 
-// A lista de unidades, definida localmente para evitar problemas de import.
+// A lista completa de todas as unidades
 const ALL_UNITS = [
   'CASA_VERDE',
   'PINHEIROS',
@@ -16,7 +16,7 @@ const ALL_UNITS = [
   '24_HORAS',
 ]
 
-// Define a estrutura para o resultado final
+// Define a estrutura para a saída final
 type SectionData = {
   section: string
   total: number
@@ -32,7 +32,7 @@ type UnitData = {
   secretarias: SectionData[]
 }
 
-// Define o tipo para os dados brutos da consulta
+// Define o tipo para o resultado bruto da query
 type RawQueryResult = {
   section: string
   total: bigint
@@ -43,32 +43,25 @@ type RawQueryResult = {
   waiting: number | null
 }
 
-// SQL Corrigido: Usa o 'status' para contagens precisas e o cálculo de tempo em UTC.
+// Query SQL que inclui todas as métricas necessárias
 const RAW_SQL = `
   SELECT
     LEFT(s.nome, LOCATE(' ', s.nome) - 1) AS section,
-    -- Total de atendimentos que já foram iniciados em algum momento
     COUNT(a.dt_ini) AS total,
-    
-    -- Faixas de tempo para quem está aguardando (status = 1), com cálculo em UTC
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) BETWEEN 0 AND 20 THEN 1
+        WHEN TIMESTAMPDIFF(MINUTE, a.dt_cheg, a.dt_ini) BETWEEN 0 AND 20 THEN 1
         ELSE 0
     END) AS range_0_20,
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) BETWEEN 21 AND 60 THEN 1
+        WHEN TIMESTAMPDIFF(MINUTE, a.dt_cheg, a.dt_ini) BETWEEN 21 AND 60 THEN 1
         ELSE 0
     END) AS range_21_60,
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) > 60 THEN 1
+        WHEN TIMESTAMPDIFF(MINUTE, a.dt_cheg, a.dt_ini) > 60 THEN 1
         ELSE 0
     END) AS range_above_60,
-    
-    -- Contagem de quem está em atendimento (status 2 ou 3)
-    SUM(CASE WHEN a.status IN (2, 3) THEN 1 ELSE 0 END) AS in_attendance,
-    
-    -- Contagem de quem está aguardando (status 1)
-    SUM(CASE WHEN a.status = 1 THEN 1 ELSE 0 END) AS waiting
+    SUM(CASE WHEN a.dt_ini IS NOT NULL AND a.dt_fim IS NULL THEN 1 ELSE 0 END) AS in_attendance,
+    SUM(CASE WHEN a.dt_ini IS NULL THEN 1 ELSE 0 END) AS waiting
   FROM
     atendimentos a
   JOIN
@@ -82,11 +75,13 @@ const RAW_SQL = `
 `
 
 /**
- * Recupera os dados de atendimento agrupados por seção para múltiplas unidades.
+ * Recupera dados de atendimento agrupados por seção para todas as unidades,
+ * incluindo contagens totais, distribuição de tempo de espera e status atual.
  */
 export async function getAttendancesBySection(): Promise<UnitData[]> {
   const allUnitsData: UnitData[] = []
 
+  // Itera sobre a lista completa de unidades
   for (const unit of ALL_UNITS) {
     const prisma = getUnitPrisma(unit)
     try {
@@ -107,7 +102,10 @@ export async function getAttendancesBySection(): Promise<UnitData[]> {
         secretarias,
       })
     } catch (error) {
-      console.error(`Failed to fetch attendance data for unit ${unit}:`, error)
+      console.error(
+        `Falha ao buscar dados de atendimento para a unidade ${unit}:`,
+        error,
+      )
       allUnitsData.push({
         unidade: unit,
         secretarias: [],

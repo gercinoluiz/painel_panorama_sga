@@ -16,10 +16,20 @@ import type { Unit } from '@/lib/types'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import React from 'react'
 
+
 const unitNames: Record<string, string> = {
   CASA_VERDE: 'Casa Verde',
   PINHEIROS: 'Pinheiros',
-  // adicione mais se necessário
+  MOOCA: 'Mooca',
+  MBOI: 'Mboi',
+  PIRITUBA: 'Pirituba',
+  PARELHEIROS: 'Parelheiros',
+  GUAIANASES: 'Guaianases',
+  ITAIM_PAULISTA: 'Itaim Paulista',
+  ERMELINO_MATARAZZO: 'Ermelino Matarazzo',
+  ITAQUERA: 'Itaquera',
+  ARICANDUVA: 'Aricanduva',
+  '24_HORAS': '24 Horas',
 }
 
 export function DashboardTable() {
@@ -33,11 +43,10 @@ export function DashboardTable() {
       const data = await fetchUnitsData()
       setUnits(data)
 
-      // Set initial expanded state for main units
       const initialExpandedState: Record<string, boolean> = {}
       data.forEach((unit) => {
         if (unit.isMainUnit) {
-          initialExpandedState[unit.id] = true
+          initialExpandedState[unit.unidade] = true
         }
       })
       setExpandedUnits(initialExpandedState)
@@ -45,28 +54,26 @@ export function DashboardTable() {
 
     getUnitsData()
 
-    // Refresh data every 60 seconds
     const interval = setInterval(getUnitsData, 60000)
     return () => clearInterval(interval)
   }, [])
 
-  const toggleExpand = (unitId: string) => {
+  const toggleExpand = (unitName: string) => {
     setExpandedUnits((prev) => ({
       ...prev,
-      [unitId]: !prev[unitId],
+      [unitName]: !prev[unitName],
     }))
   }
 
   const getWaitTimeColor = (time?: string) => {
     if (!time || time === '00:00:00')
-      return 'text-slate-500 dark:text-slate-400'
-
+      return 'text-slate-500 dark:text-slate-400 text-lg'
     const [hours, minutes] = time.split(':').map(Number)
-
-    if (hours > 0 || minutes > 45)
-      return 'text-rose-600 dark:text-rose-500 font-medium'
-    if (minutes > 30) return 'text-amber-600 dark:text-amber-500 font-medium'
-    return 'text-emerald-600 dark:text-emerald-500 font-medium'
+    if (hours > 0 || minutes > 20)
+      return 'text-rose-600 dark:text-rose-500 font-medium text-lg'
+    if (minutes > 60)
+      return 'text-amber-600 dark:text-amber-500 font-medium text-lg'
+    return 'text-emerald-600 dark:text-emerald-500 font-medium text-lg'
   }
 
   return (
@@ -75,94 +82,193 @@ export function DashboardTable() {
         <Table>
           <TableHeader className='bg-slate-100 dark:bg-slate-800/50'>
             <TableRow>
-              <TableHead className='w-[300px]'>Unidade/Seção</TableHead>
-              <TableHead className='text-center'>Atendimentos</TableHead>
-              <TableHead className='text-center'>Espera real</TableHead>
-              <TableHead className='text-center'>0 a 30 min</TableHead>
-              <TableHead className='text-center'>30 a 45 min</TableHead>
-              <TableHead className='text-center'>Acima de 45 min</TableHead>
-              <TableHead className='text-center'>Em atendimento</TableHead>
-              <TableHead className='text-center'>Aguardando</TableHead>
+              <TableHead className='w-[300px] px-2 py-2 h-auto text-lg'>
+                Unidade/Seção
+              </TableHead>
+              <TableHead className='text-center px-2 py-2 h-auto'>
+                Atendimentos
+              </TableHead>
+              <TableHead className='text-center px-2 py-2 h-auto'>
+                Maior espera
+              </TableHead>
+              <TableHead className='text-center h-auto py-2'>
+                Aguardando <br />0 a 20 min 🥳
+              </TableHead>
+              <TableHead className='text-center h-auto py-2'>
+                Aguardando <br />
+                21 a 60 min ⚠️
+              </TableHead>
+              <TableHead className='text-center h-auto py-2'>
+                Aguardando <br />
+                Acima de 60 min 🚨
+              </TableHead>
+              <TableHead className='text-center h-auto py-2'>
+                Em atendimento 👩🏻‍💻
+              </TableHead>
+              <TableHead className='text-center h-auto py-2'>
+                Aguardando ⏳
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {units.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className='text-center'>
+                <TableCell colSpan={8} className='text-center py-4'>
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : (
-              units.map((unit) => (
-                <React.Fragment key={unit.id}>
-                  <TableRow
-                    className='cursor-pointer bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60'
-                    onClick={() => toggleExpand(unit.id)}
-                  >
-                    <TableCell className='font-medium flex items-center gap-2'>
-                      {expandedUnits[unit.id] ? (
-                        <ChevronDown className='h-4 w-4 text-slate-500' />
-                      ) : (
-                        <ChevronRight className='h-4 w-4 text-slate-500' />
-                      )}
-                      {unitNames[unit.unidade].toUpperCase() || unit.unidade}
-                      <Badge variant='outline' className='ml-2'>
-                        {unit.totalServices}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className='text-center font-medium'>
-                      {/* Soma total de atendimentos da unidade */}
-                      {unit.secretarias.reduce(
-                        (sum, sec) => sum + sec.total,
-                        0,
-                      )}
-                    </TableCell>
-                    <TableCell
-                      className={`text-center ${getWaitTimeColor(
-                        unit.waitTime,
-                      )}`}
+              units.map((unit) => {
+                // --- LÓGICA ADICIONADA AQUI ---
+                // Calcula o maior tempo de espera de todas as seções da unidade.
+                const overallMaxWaitTime = unit.secretarias.reduce(
+                  (max, sec) => {
+                    return sec.maxWaitTime > max ? sec.maxWaitTime : max
+                  },
+                  '00:00:00',
+                )
+
+                return (
+                  <React.Fragment key={unit.unidade}>
+                    <TableRow
+                      className={`cursor-pointer bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 ${
+                        unit.secretarias.length === 0 ? 'opacity-50' : ''
+                      }`}
+                      onClick={() => toggleExpand(unit.unidade)}
                     >
-                      {unit.waitTime || '00:00:00'}
-                    </TableCell>
-                    <TableCell className='text-center'>
-                      {unit.under30min}
-                    </TableCell>
-                    <TableCell className='text-center'>
-                      {unit.between30and45min}
-                    </TableCell>
-                    <TableCell className='text-center'>
-                      {unit.above45min}
-                    </TableCell>
-                    <TableCell className='text-center'>
-                      {unit.inService}
-                    </TableCell>
-                    <TableCell className='text-center'>
-                      {unit.waiting}
-                    </TableCell>
-                  </TableRow>
-                  {expandedUnits[unit.id] &&
-                    unit.secretarias.map((sec) => (
-                      <TableRow
-                        key={sec.section}
-                        className='odd:bg-slate-50 even:bg-white dark:odd:bg-slate-800/10 dark:even:bg-slate-900/10 hover:bg-slate-50 dark:hover:bg-slate-800/20'
+                      <TableCell className='font-medium flex items-center gap-2 text-lg py-1'>
+                        {expandedUnits[unit.unidade] ? (
+                          <ChevronDown className='h-4 w-4 text-slate-500' />
+                        ) : (
+                          <ChevronRight className='h-4 w-4 text-slate-500' />
+                        )}
+                        {unitNames[unit.unidade]?.toUpperCase() || unit.unidade}
+                        {unit.secretarias.length === 0 && ` 😵`}
+                        <Badge variant='outline' className='ml-2'>
+                          {unit.totalServices}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='text-center font-medium text-lg py-1'>
+                        {unit.secretarias.reduce(
+                          (sum, sec) => sum + sec.total,
+                          0,
+                        )}
+                      </TableCell>
+                      {/* Célula corrigida: exibe o maior tempo calculado */}
+                      <TableCell
+                        className={`text-center text-lg py-1 ${getWaitTimeColor(
+                          overallMaxWaitTime,
+                        )}`}
                       >
-                        <TableCell className='pl-10'>{sec.section}</TableCell>
-                        <TableCell className='text-center'>
-                          {sec.total}
-                        </TableCell>
-                        {/* ...outras colunas em branco ou com dados específicos da secretaria... */}
-                        <TableCell
-                          className='text-center'
-                          colSpan={6}
-                        ></TableCell>
-                      </TableRow>
-                    ))}
-                </React.Fragment>
-              ))
+                        <Badge
+                          variant='outline'
+                          className={getWaitTimeColor(overallMaxWaitTime)}
+                        >
+                          {overallMaxWaitTime}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='text-center text-lg py-1'>
+                        <Badge
+                          variant='outline'
+                          className='text-emerald-600 dark:text-emerald-500 font-medium text-lg'
+                        >
+                          {unit.secretarias
+                            .map((sec) => sec.zero_to_twenty)
+                            .reduce((sum, val) => sum + val, 0)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='text-center text-lg py-1'>
+                        <Badge
+                          variant='outline'
+                          className='text-yellow-600 dark:text-yellow-500 font-medium text-lg'
+                        >
+                          {unit.secretarias
+                            .map((sec) => sec.twenty_one_to_sixty)
+                            .reduce((sum, val) => sum + val, 0)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='text-center text-lg py-1'>
+                        <Badge
+                          variant='outline'
+                          className='text-red-600 dark:text-red-500 font-medium text-lg'
+                        >
+                          {unit.secretarias
+                            .map((sec) => sec.above_sixty)
+                            .reduce((sum, val) => sum + val, 0)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className='text-center text-lg py-1'>
+                        {unit.secretarias
+                          .map((sec) => sec.in_attendance)
+                          .reduce((sum, val) => sum + val, 0)}
+                      </TableCell>
+                      <TableCell className='text-center text-lg py-1'>
+                        {unit.secretarias
+                          .map((sec) => sec.waiting)
+                          .reduce((sum, val) => sum + val, 0)}
+                      </TableCell>
+                    </TableRow>
+
+                    {expandedUnits[unit.unidade] &&
+                      unit.secretarias.map((sec) => (
+                        <TableRow
+                          key={sec.section}
+                          className='odd:bg-slate-50 even:bg-white dark:odd:bg-slate-800/10 dark:even:bg-slate-900/10 hover:bg-slate-50 dark:hover:bg-slate-800/20'
+                        >
+                          <TableCell className='pl-10 text-base py-1 leading-tight'>
+                            {sec.section}
+                          </TableCell>
+                          <TableCell className='text-center text-base py-1 leading-tight'>
+                            {sec.total}
+                          </TableCell>
+                          <TableCell className='text-center text-base py-1 leading-tight'>
+                            <Badge
+                              variant='outline'
+                              className={getWaitTimeColor(sec.maxWaitTime)}
+                            >
+                              {sec.maxWaitTime || '00:00:00'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className='text-center text-base py-1 leading-tight'>
+                            <Badge
+                              variant='outline'
+                              className='text-emerald-600 dark:text-emerald-500 font-medium'
+                            >
+                              {sec.zero_to_twenty}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className='text-center py-1 leading-tight'>
+                            <Badge
+                              variant='outline'
+                              className='text-yellow-600 dark:text-yellow-500 font-medium'
+                            >
+                              {sec.twenty_one_to_sixty}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className='text-center py-1 leading-tight'>
+                            <Badge
+                              variant='outline'
+                              className='text-red-600 dark:text-red-500 font-medium'
+                            >
+                              {sec.above_sixty}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className='text-center text-base py-1 leading-tight'>
+                            {sec.in_attendance}
+                          </TableCell>
+                          <TableCell className='text-center text-base py-1 leading-tight'>
+                            {sec.waiting}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </React.Fragment>
+                )
+              })
             )}
           </TableBody>
         </Table>
       </CardContent>
+
     </Card>
   )
 }
