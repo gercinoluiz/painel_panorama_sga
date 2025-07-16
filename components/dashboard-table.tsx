@@ -16,7 +16,6 @@ import type { Unit } from '@/lib/types'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import React from 'react'
 
-
 const unitNames: Record<string, string> = {
   CASA_VERDE: 'Casa Verde',
   PINHEIROS: 'Pinheiros',
@@ -66,13 +65,22 @@ export function DashboardTable() {
   }
 
   const getWaitTimeColor = (time?: string) => {
-    if (!time || time === '00:00:00')
+    if (!time || time === '00:00:00') {
       return 'text-slate-500 dark:text-slate-400 text-lg'
+    }
+
     const [hours, minutes] = time.split(':').map(Number)
-    if (hours > 0 || minutes > 20)
+    const totalMinutes = hours * 60 + minutes
+
+    if (totalMinutes > 60) {
+      // Vermelho para mais de 60 minutos
       return 'text-rose-600 dark:text-rose-500 font-medium text-lg'
-    if (minutes > 60)
+    }
+    if (totalMinutes >= 21) {
+      // Amarelo para 21 a 60 minutos
       return 'text-amber-600 dark:text-amber-500 font-medium text-lg'
+    }
+    // Verde para até 20 minutos
     return 'text-emerald-600 dark:text-emerald-500 font-medium text-lg'
   }
 
@@ -268,7 +276,6 @@ export function DashboardTable() {
           </TableBody>
         </Table>
       </CardContent>
-
     </Card>
   )
 }
