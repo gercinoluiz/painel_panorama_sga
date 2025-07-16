@@ -1,4 +1,4 @@
-import { getUnitPrisma, ALL_UNITS } from './unitService'
+import { getUnitPrisma } from './unitService'
 
 // A lista de unidades, definida localmente para evitar problemas de import.
 const ALL_UNITS = [
@@ -16,7 +16,6 @@ const ALL_UNITS = [
   '24_HORAS',
 ]
 
-// Define a estrutura para o resultado final
 type SectionData = {
   section: string
   total: number
@@ -32,7 +31,6 @@ type UnitData = {
   secretarias: SectionData[]
 }
 
-// Define o tipo para os dados brutos da consulta
 type RawQueryResult = {
   section: string
   total: bigint
@@ -43,31 +41,24 @@ type RawQueryResult = {
   waiting: number | null
 }
 
-// SQL Corrigido: Usa o 'status' para contagens precisas e o cálculo de tempo em UTC.
+// SQL Corrigido: Removido CONVERT_TZ e usando DATE_SUB para ajustar o fuso horário.
 const RAW_SQL = `
   SELECT
     LEFT(s.nome, LOCATE(' ', s.nome) - 1) AS section,
-    -- Total de atendimentos que já foram iniciados em algum momento
     COUNT(a.dt_ini) AS total,
-    
-    -- Faixas de tempo para quem está aguardando (status = 1), com cálculo em UTC
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) BETWEEN 0 AND 20 THEN 1
+        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, a.dt_cheg, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 HOUR)) BETWEEN 0 AND 20 THEN 1
         ELSE 0
     END) AS range_0_20,
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) BETWEEN 21 AND 60 THEN 1
+        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, a.dt_cheg, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 HOUR)) BETWEEN 21 AND 60 THEN 1
         ELSE 0
     END) AS range_21_60,
     SUM(CASE
-        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'), UTC_TIMESTAMP()) > 60 THEN 1
+        WHEN a.status = 1 AND TIMESTAMPDIFF(MINUTE, a.dt_cheg, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 HOUR)) > 60 THEN 1
         ELSE 0
     END) AS range_above_60,
-    
-    -- Contagem de quem está em atendimento (status 2 ou 3)
     SUM(CASE WHEN a.status IN (2, 3) THEN 1 ELSE 0 END) AS in_attendance,
-    
-    -- Contagem de quem está aguardando (status 1)
     SUM(CASE WHEN a.status = 1 THEN 1 ELSE 0 END) AS waiting
   FROM
     atendimentos a

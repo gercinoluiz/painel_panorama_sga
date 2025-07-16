@@ -15,8 +15,8 @@ const ALL_UNITS = [
   'ARICANDUVA',
   '24_HORAS',
 ]
-// SQL Definitivo: Filtra por status para garantir que apenas atendimentos
-// ativos e válidos sejam considerados no cálculo do tempo de espera.
+
+// SQL Corrigido: Removido CONVERT_TZ e usando DATE_SUB para ajustar o fuso horário.
 const RAW_SQL = `
   SELECT
       LEFT(s.nome, LOCATE(' ', s.nome) - 1) AS section,
@@ -24,8 +24,8 @@ const RAW_SQL = `
           MAX(
               TIMESTAMPDIFF(
                   SECOND,
-                  CONVERT_TZ(a.dt_cheg, 'America/Sao_Paulo', 'UTC'),
-                  UTC_TIMESTAMP()
+                  a.dt_cheg,
+                  DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 HOUR)
               )
           )
       ) AS max_wait_time
@@ -34,7 +34,6 @@ const RAW_SQL = `
   JOIN
       servicos s ON a.servico_id = s.id
   WHERE
-      -- ESTA É A MUDANÇA PRINCIPAL: Considerar apenas quem está aguardando.
       a.status = 1 
       AND LEFT(s.nome, LOCATE(' ', s.nome) - 1) IS NOT NULL 
       AND LENGTH(LEFT(s.nome, LOCATE(' ', s.nome) - 1)) > 0
